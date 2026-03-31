@@ -1,0 +1,95 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Build
+        run: mvn clean package -DskipTests
+
+      # 🔥 Gera versão única
+      - name: Generate version
+        run: echo "VERSION=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+
+      # 🔥 Define nome do jar
+      - name: Set jar name
+        run: echo "JAR_NAME=apiAlmox-${VERSION}.jar" >> $GITHUB_ENV
+
+      # 🔥 Renomeia corretamente
+      - name: Rename jar
+        run: |
+          JAR=$(ls target/*.jar | head -n 1)
+          mv "$JAR" target/${{ env.JAR_NAME }}
+
+      # 🔍 Debug (opcional mas útil)
+      - name: List files
+        run: ls -lh target
+
+      # 📤 Upload corrigido
+      - name: Upload jar
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "target/${{ env.JAR_NAME }}"
+          target: "/opt/apiAlmox/releases"
+          strip_components: 1  # 🔥 Remove o prefixo 'target/'
+
+      # 🚀 Deploy
+      - name: Deploy
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+
+            set -e
+
+            VERSION=${{ env.VERSION }}
+            JAR=${{ env.JAR_NAME }}
+
+            cd /opt/apiAlmox
+
+            echo "📦 Deploy versão: $VERSION"
+
+            # cria pasta da versão
+            mkdir -p releases/$VERSION
+
+            # copia jar correto
+            cp releases/$JAR releases/$VERSION/apiAlmox.jar
+
+            # atualiza symlink
+            ln -sfn releases/$VERSION current
+
+            # restart
+            sudo systemctl restart apiAlmox
+
+            sleep 3
+
+            # valida serviço
+            systemctl is-active --quiet apiAlmox
+
+            # limpa antigas (mantém 5)
+            cd releases
+            ls -dt */ | tail -n +6 | xargs rm -rf || true
+
+            echo "✅ Deploy concluído: $VERSION"
