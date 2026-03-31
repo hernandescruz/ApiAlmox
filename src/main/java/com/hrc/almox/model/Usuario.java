@@ -1,6 +1,7 @@
 package com.hrc.almox.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.hrc.almox.model.enuns.PerfilUsuario;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -27,7 +28,7 @@ public class Usuario implements UserDetails {
     @Column(nullable = false, length = 100)
     private String nome;
 
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     private String cargo;
@@ -72,4 +73,7 @@ public class Usuario implements UserDetails {
     @Enumerated(EnumType.STRING)
     private PerfilUsuario perfil = PerfilUsuario.OPERADOR;
 
+    public PerfilUsuario getPerfilUsuario() {
+        return perfil;
+    }
 }

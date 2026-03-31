@@ -31,7 +31,7 @@ public class TokenService {
         try {
             var algoritmo = Algorithm.HMAC256(secret);
 
-            String[] dados = {usuario.getId()+"",usuario.getNome(), usuario.getCargo()};
+            String[] dados = {usuario.getId()+"",usuario.getNome(), usuario.getCargo(), usuario.getPerfil().name()};
 
 
             dadosUsuario = new DadosUsuario(usuario);
