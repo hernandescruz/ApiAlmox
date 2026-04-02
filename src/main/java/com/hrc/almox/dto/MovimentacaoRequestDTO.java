@@ -37,4 +37,9 @@ public class MovimentacaoRequestDTO {
     @Schema(description = "ID da finalidade da movimentação", example = "4")
     @NotNull(message = "O ID da finalidade é obrigatória")
     private Integer finalidadeId;
+
+    @Schema(description = "ID da Solicitante da movimentação", example = "1")
+    @NotNull(message = "O ID da finalidade é obrigatória")
+    private Integer solicitanteId;
+
 }

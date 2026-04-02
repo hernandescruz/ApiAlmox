@@ -43,6 +43,10 @@ public class Movimentacao {
     @JoinColumn(name = "finalidade_id", nullable = false)
     private Finalidade finalidade;
 
+    @ManyToOne
+    @JoinColumn(name = "solicitante_id", nullable = false)
+    private Solicitante solicitante;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

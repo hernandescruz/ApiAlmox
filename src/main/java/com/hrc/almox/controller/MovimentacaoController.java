@@ -26,6 +26,8 @@ public class MovimentacaoController {
     @Autowired
     private MovimentacaoService movimentacaoService;
 
+
+
     @Operation(summary = "Registrar movimentação", description = "Criação de novo registro de entrada ou saída, atualizando a quantidade do item em estoque de acordo.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Movimentação registrada com sucesso e estoque atualizado"),
@@ -39,10 +41,10 @@ public class MovimentacaoController {
     @PostMapping
     public ResponseEntity<?> registrar(@RequestBody @Valid MovimentacaoRequestDTO dto) {
         try {
-            // Convertendo DTO para Entidade
-            Movimentacao movimentacao = mapDtoToEntity(dto);
 
-            Movimentacao novaMovimentacao = movimentacaoService.registrarMovimentacao(movimentacao);
+          //  Movimentacao movimentacao = mapDtoToEntity(dto);
+
+            Movimentacao novaMovimentacao = movimentacaoService.registrarMovimentacao(dto);
             return ResponseEntity.status(HttpStatus.CREATED).body(novaMovimentacao);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -55,28 +57,5 @@ public class MovimentacaoController {
         return movimentacaoService.listarTodas();
     }
 
-    private Movimentacao mapDtoToEntity(MovimentacaoRequestDTO dto) {
-        Movimentacao mov = new Movimentacao();
-        mov.setTipoMovimento(dto.getTipoMovimento());
-        mov.setQuantidade(dto.getQuantidade());
 
-        // Criamos objetos "proxy" apenas com o ID para que o JPA saiba a referência
-        Item item = new Item();
-        item.setId(dto.getItemId());
-        mov.setItem(item);
-
-        Usuario usuario = new Usuario();
-        usuario.setId(dto.getUsuarioId());
-        mov.setUsuario(usuario);
-
-        CentroCusto cc = new CentroCusto();
-        cc.setId(dto.getCentroCustoId());
-        mov.setCentroCusto(cc);
-
-        Finalidade fin = new Finalidade();
-        fin.setId(dto.getFinalidadeId());
-        mov.setFinalidade(fin);
-
-        return mov;
-    }
 }

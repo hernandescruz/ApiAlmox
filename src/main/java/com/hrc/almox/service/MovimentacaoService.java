@@ -1,11 +1,10 @@
 package com.hrc.almox.service;
 
-import com.hrc.almox.model.Movimentacao;
+import com.hrc.almox.dto.MovimentacaoRequestDTO;
+import com.hrc.almox.model.*;
 import com.hrc.almox.model.enuns.TipoMovimento;
-import com.hrc.almox.repository.ItemRepository;
-import com.hrc.almox.model.Item;
-import com.hrc.almox.repository.MovimentacaoRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.hrc.almox.repository.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,53 +12,114 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor // Gera o construtor para injeção de dependência (substitui o @Autowired)
 public class MovimentacaoService {
 
-    @Autowired
-    private MovimentacaoRepository movimentacaoRepository;
-
-    @Autowired
-    private ItemRepository itemRepository;
+    private final MovimentacaoRepository movimentacaoRepository;
+    private final ItemRepository itemRepository;
+    private final CentroCustoRepository ccRepository;
+    private final FinalidadeRepository finalidadeRepository;
+    private final SolicitanteRepository solicitanteRepository;
+    private final UsuarioRepository usuarioRepository;
 
     @Transactional
-    public Movimentacao registrarMovimentacao(Movimentacao movimentacao) {
-        // 1. Buscar o item atualizado no banco
-        System.out.println(movimentacao);
-        Item item = itemRepository.findById(movimentacao.getItem().getId())
+    public Movimentacao registrarMovimentacao(MovimentacaoRequestDTO dto) {
+        // 1. Aplicar regras de preenchimento automático para casos especiais
+        ajustarDadosDeSistema(dto);
+
+        // 2. Buscar Entidades Reais (Garante que os dados existem e estão atualizados)
+        Item item = itemRepository.findById(dto.getItemId())
                 .orElseThrow(() -> new RuntimeException("Item não encontrado"));
 
-        BigDecimal quantidade = movimentacao.getQuantidade();
+        Usuario usuario = usuarioRepository.findById(dto.getUsuarioId())
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        // 3. Validar e Calcular Saldo
+        atualizarEstoqueItem(item, dto.getTipoMovimento(), dto.getQuantidade());
+
+        // 4. Mapear DTO para Entidade
+        Movimentacao mov = new Movimentacao();
+        mov.setTipoMovimento(dto.getTipoMovimento());
+        mov.setQuantidade(dto.getQuantidade());
+        mov.setItem(item);
+        mov.setUsuario(usuario);
+        mov.setValorTotalMovimentacao(item.getPrecoUnitario().multiply(dto.getQuantidade()));
+
+        // Para os campos abaixo, buscamos a referência (proxy) para performance
+        mov.setCentroCusto(ccRepository.getReferenceById(dto.getCentroCustoId()));
+        mov.setFinalidade(finalidadeRepository.getReferenceById(dto.getFinalidadeId()));
+        mov.setSolicitante(solicitanteRepository.getReferenceById(dto.getSolicitanteId()));
+
+        // 5. Salvar e Retornar
+        itemRepository.save(item);
+        return movimentacaoRepository.save(mov);
+    }
+
+    private void atualizarEstoqueItem(Item item, TipoMovimento tipo, BigDecimal qtd) {
         BigDecimal estoqueAtual = item.getEstoqueAtual();
 
-        // 2. Lógica de cálculo de saldo baseada no TipoMovimento
-        if (movimentacao.getTipoMovimento() == TipoMovimento.ENTRADA ||
-                movimentacao.getTipoMovimento() == TipoMovimento.ENTRADA_AJUSTE) {
 
-            item.setEstoqueAtual(estoqueAtual.add(quantidade));
-
-        } else if (movimentacao.getTipoMovimento() == TipoMovimento.SAIDA ||
-                movimentacao.getTipoMovimento() == TipoMovimento.SAIDA_AJUSTE) {
-
-            // RN01: Impedir Saldo Negativo (exceto se você decidir permitir em ajustes)
-            if (estoqueAtual.compareTo(quantidade) < 0) {
-                throw new RuntimeException("Saldo insuficiente para realizar esta saída! Estoque atual: " + estoqueAtual);
+        if (tipo.isEntrada()) {
+            item.setEstoqueAtual(estoqueAtual.add(qtd));
+        } else {
+            // Regra: Não permite estoque negativo (isSaida)
+            if (estoqueAtual.compareTo(qtd) < 0) {
+                throw new RuntimeException("Saldo insuficiente! Atual: " + estoqueAtual + ", Solicitado: " + qtd);
             }
-
-            item.setEstoqueAtual(estoqueAtual.subtract(quantidade));
+            item.setEstoqueAtual(estoqueAtual.subtract(qtd));
         }
-
-        // 3. Calcular valor total da movimentação (Preço Unitário x Quantidade)
-        movimentacao.setValorTotalMovimentacao(item.getPrecoUnitario().multiply(quantidade));
-
-        // 4. Salvar item atualizado e a movimentação
-        itemRepository.save(item);
-        System.out.println("antes do save");
-        System.out.println(movimentacao);
-        return movimentacaoRepository.save(movimentacao);
     }
 
-    public List<Movimentacao> listarTodas(){
+    /**
+     * Aplica regras automáticas para Ajustes e Entradas,
+     * garantindo que os IDs no DTO apontem para os registros de sistema.
+     */
+    private void ajustarDadosDeSistema(MovimentacaoRequestDTO dto) {
+        TipoMovimento tipo = dto.getTipoMovimento();
+
+        // USANDO SEU NOVO MÉTODO .isAjuste()
+        if (tipo.isAjuste()) {
+            dto.setCentroCustoId(getOrCreateCC("INVENTÁRIO").getId());
+            dto.setFinalidadeId(getOrCreateFinalidade("INVENTÁRIO").getId());
+            dto.setSolicitanteId(getOrCreateSolicitante("ADM").getId());
+        }
+        // ENTRADA NORMAL (COMPRA/REPOSIÇÃO)
+        else if (tipo == TipoMovimento.ENTRADA) {
+            dto.setCentroCustoId(getOrCreateCC("ALMOXARIFADO").getId());
+            dto.setFinalidadeId(getOrCreateFinalidade("REPOSIÇÃO").getId());
+            dto.setSolicitanteId(getOrCreateSolicitante("ADM").getId());
+        }
+    }
+
+    // Métodos Auxiliares de "Busca ou Criação"
+    private CentroCusto getOrCreateCC(String nome) {
+        return ccRepository.findByNome(nome).orElseGet(() -> {
+            CentroCusto nc = new CentroCusto();
+            nc.setNome(nome);
+            nc.setAtivo(true);
+            return ccRepository.save(nc);
+        });
+    }
+
+    private Finalidade getOrCreateFinalidade(String nome) {
+        return finalidadeRepository.findByNome(nome).orElseGet(() -> {
+            Finalidade nf = new Finalidade();
+            nf.setNome(nome);
+            nf.setAtivo(true);
+            return finalidadeRepository.save(nf);
+        });
+    }
+
+    private Solicitante getOrCreateSolicitante(String nome) {
+        return solicitanteRepository.findByNome(nome).orElseGet(() -> {
+            Solicitante ns = new Solicitante();
+            ns.setNome(nome);
+            ns.setAtivo(true);
+            return solicitanteRepository.save(ns);
+        });
+    }
+
+    public List<Movimentacao> listarTodas() {
         return movimentacaoRepository.findAllByOrderByCreatedAtDesc();
     }
-
 }

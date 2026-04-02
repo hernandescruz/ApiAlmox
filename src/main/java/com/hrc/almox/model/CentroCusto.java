@@ -20,4 +20,6 @@ public class CentroCusto {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    private Boolean ativo = true;
 }

@@ -47,6 +47,17 @@ public class FinalidadeController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Finalidade criar(@RequestBody Finalidade finalidade) {
+        if (repository.existsByNome(finalidade.getNome())) {
+            throw new RuntimeException("Finalidade já existente");
+        }
         return repository.save(finalidade);
+    }
+
+    @PatchMapping("/{id}/inativar")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletar(@PathVariable Integer id) {
+       Finalidade finalidade = repository.findById(id).orElseThrow(() -> new RuntimeException("Finalidade não encontrada"));
+       finalidade.setAtivo(false);
+       repository.save(finalidade);
     }
 }

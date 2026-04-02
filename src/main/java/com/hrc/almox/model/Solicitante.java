@@ -3,12 +3,13 @@ package com.hrc.almox.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "finalidades",catalog = "almoxarifado")
+@Table(name = "solicitantes",catalog = "almoxarifado")
 @Data
-public class Finalidade {
+public class Solicitante {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,6 +23,4 @@ public class Finalidade {
     private LocalDateTime createdAt;
 
     private Boolean ativo = true;
-
-
 }

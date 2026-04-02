@@ -4,6 +4,7 @@ import com.hrc.almox.dto.ItemRequestDTO;
 import com.hrc.almox.model.Item;
 import com.hrc.almox.repository.ItemRepository;
 import com.hrc.almox.dominio.ValidacaoException;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -118,5 +121,46 @@ public class ItemController {
     public Item buscarPorCodigo(@PathVariable Integer codigo) {
         return itemRepository.findByCodigoItem(codigo)
                 .orElseThrow(() -> new RuntimeException("Item com código " + codigo + " não encontrado."));
+    }
+
+    @PatchMapping("/{id}/inativar")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletar(@PathVariable Long id) {
+        Item item = itemRepository.findById(id).orElseThrow(() -> new RuntimeException("Item não encontrado"));
+        item.setAtivo(false);
+        itemRepository.save(item);
+    }
+
+    @PostMapping("/lote")
+    @Transactional
+    public ResponseEntity<?> criarEmLote(@RequestBody List<ItemRequestDTO> dtos) {
+        List<Item> novosItens = new ArrayList<>();
+        List<String> erros = new ArrayList<>();
+
+        for (ItemRequestDTO dto : dtos) {
+            // Verifica se o código já existe para não quebrar o banco
+            if (itemRepository.findByCodigoItem(dto.getCodigoItem()).isPresent()) {
+                erros.add("Código " + dto.getCodigoItem() + " já cadastrado (Item: " + dto.getDescricao() + ")");
+                continue;
+            }
+
+            Item item = new Item();
+            BeanUtils.copyProperties(dto, item);
+
+            if (item.getEstoqueAtual() == null) item.setEstoqueAtual(BigDecimal.ZERO);
+            if (item.getEstoqueMinimo() == null) item.setEstoqueMinimo(BigDecimal.ZERO);
+
+            novosItens.add(item);
+        }
+
+        if (!novosItens.isEmpty()) {
+            itemRepository.saveAll(novosItens);
+        }
+
+        if (!erros.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT).body(erros);
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED).body("Importação concluída com sucesso!");
     }
 }

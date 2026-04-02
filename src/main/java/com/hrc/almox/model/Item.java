@@ -46,4 +46,9 @@ public class Item {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+
+    private Boolean ativo = true;
+
+
 }
