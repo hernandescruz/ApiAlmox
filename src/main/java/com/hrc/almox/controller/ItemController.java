@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -139,13 +140,19 @@ public class ItemController {
 
         for (ItemRequestDTO dto : dtos) {
             // Verifica se o código já existe para não quebrar o banco
-            if (itemRepository.findByCodigoItem(dto.getCodigoItem()).isPresent()) {
-                erros.add("Código " + dto.getCodigoItem() + " já cadastrado (Item: " + dto.getDescricao() + ")");
-                continue;
-            }
+            Optional<Item> existenteOpt = itemRepository.findByCodigoItem(dto.getCodigoItem());
 
-            Item item = new Item();
-            BeanUtils.copyProperties(dto, item);
+            Item item;
+
+            if (existenteOpt.isPresent()) {
+                // Já existe → atualiza
+                item = existenteOpt.get();
+                BeanUtils.copyProperties(dto, item, "id", "estoqueAtual"); // cuidado pra não sobrescrever o ID
+            } else {
+                // Não existe → cria novo
+                item = new Item();
+                BeanUtils.copyProperties(dto, item);
+            }
 
             if (item.getEstoqueAtual() == null) item.setEstoqueAtual(BigDecimal.ZERO);
             if (item.getEstoqueMinimo() == null) item.setEstoqueMinimo(BigDecimal.ZERO);
