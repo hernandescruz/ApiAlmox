@@ -4,12 +4,14 @@ import com.hrc.almox.dto.ItemRequestDTO;
 import com.hrc.almox.model.Item;
 import com.hrc.almox.repository.ItemRepository;
 import com.hrc.almox.dominio.ValidacaoException;
+import com.hrc.almox.service.AuditoriaService;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -24,6 +26,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
 @Tag(name = "Itens", description = "Endpoints para gerenciamento do cadastro de itens do almoxarifado")
 @RestController
 @RequestMapping("/itens")
@@ -31,6 +38,10 @@ public class ItemController {
 
     @Autowired
     private ItemRepository itemRepository;
+
+    @Autowired
+    private AuditoriaService auditoriaService;
+
 
     @Operation(summary = "Listar todos os itens", description = "Retorna uma lista com todos os itens cadastrados no sistema.")
     @ApiResponses(value = {
@@ -40,8 +51,17 @@ public class ItemController {
                             examples = @ExampleObject(value = "{\"erro\": \"Erro de comunicação com o banco de dados\"}")))
     })
     @GetMapping
-    public List<Item> listarTodos() {
-        return itemRepository.findAll();
+    public Page<Item> listarTodos(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size,
+            @RequestParam(required = false) String descricao,
+            @RequestParam(required = false) Boolean ativo,
+            @RequestParam(required = false) String status // "REPOR" ou "OK"
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("descricao").ascending());
+
+        // Aqui usamos uma busca customizada que filtra tudo de uma vez no banco
+        return itemRepository.findComFiltros(descricao, ativo, status, pageable);
     }
 
     @Operation(summary = "Criar novo item", description = "Cadastra um novo item no estoque com a quantidade inicial zerada, se não informada.")
@@ -169,5 +189,27 @@ public class ItemController {
         }
 
         return ResponseEntity.status(HttpStatus.CREATED).body("Importação concluída com sucesso!");
+    }
+
+    @PutMapping("/{id}")
+    @Transactional
+    public ResponseEntity<Item> atualizar(@PathVariable Long id, @RequestBody @Valid ItemRequestDTO dto, Authentication auth) {
+        Item itemExistente = itemRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Item não encontrado"));
+
+        if (itemExistente.getPrecoUnitario().compareTo(dto.getPrecoUnitario()) != 0) {
+            auditoriaService.registrar(
+                    auth.getName(),
+                    "ITENS",
+                    "ALTERAÇÃO DE PREÇO",
+                    "Item " + itemExistente.getCodigoItem() + " mudou de R$" + itemExistente.getPrecoUnitario() + " para R$" + dto.getPrecoUnitario()
+            );
+        }
+
+        // Copiamos as propriedades do DTO para o item existente
+        // IMPORTANTE: Ignoramos 'id' e 'estoqueAtual' para manter a integridade do saldo
+        BeanUtils.copyProperties(dto, itemExistente, "id", "estoqueAtual", "createdAt");
+
+        return ResponseEntity.ok(itemRepository.save(itemExistente));
     }
 }

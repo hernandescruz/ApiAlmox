@@ -2,6 +2,8 @@ package com.hrc.almox.repository;
 
 import com.hrc.almox.model.Item;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -25,6 +27,14 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from Item i where i.id = :id")
     Optional<Item> findByIdForUpdate(@Param("id") Long id);
+
+    @Query("SELECT i FROM Item i WHERE " +
+            "(:desc is null OR UPPER(i.descricao) LIKE UPPER(CONCAT('%', :desc, '%'))) AND " +
+            "(:ativo is null OR i.ativo = :ativo) AND " +
+            "(:status is null OR " +
+            "  (:status = 'REPOR' AND i.estoqueAtual < i.estoqueMinimo) OR " +
+            "  (:status = 'OK' AND i.estoqueAtual >= i.estoqueMinimo))")
+    Page<Item> findComFiltros(String desc, Boolean ativo, String status, Pageable pageable);
 
 
 }
