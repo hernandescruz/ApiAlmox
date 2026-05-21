@@ -1,10 +1,12 @@
 package com.hrc.almox.repository;
 
 import com.hrc.almox.model.Movimentacao;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
 public interface MovimentacaoRepository extends JpaRepository<Movimentacao, Long> {
     List<Movimentacao> findAllByOrderByCreatedAtDesc();
+    List<Movimentacao> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

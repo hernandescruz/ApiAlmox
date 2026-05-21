@@ -5,6 +5,7 @@ import com.hrc.almox.model.*;
 import com.hrc.almox.service.MovimentacaoService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -52,9 +53,9 @@ public class MovimentacaoController {
     }
 
     @GetMapping
-    public List<Movimentacao> listarTodas() {
+    public List<Movimentacao> listarTodas(Pageable pageable) {
 
-        return movimentacaoService.listarTodas();
+        return movimentacaoService.listarTodas(pageable);
     }
 
 

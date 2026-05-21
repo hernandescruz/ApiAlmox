@@ -5,6 +5,7 @@ import com.hrc.almox.model.*;
 import com.hrc.almox.model.enuns.TipoMovimento;
 import com.hrc.almox.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -119,7 +120,7 @@ public class MovimentacaoService {
         });
     }
 
-    public List<Movimentacao> listarTodas() {
-        return movimentacaoRepository.findAllByOrderByCreatedAtDesc();
+    public List<Movimentacao> listarTodas(Pageable pageable) {
+        return movimentacaoRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 }
